@@ -20,10 +20,14 @@ $(document).ready(function() {
   window.addEventListener('resize', resizeCanvas, false);
   resizeCanvas();
 
-  var units = [];
+  var units = [], liveUnits = [];
+  var sides = [[-1, -1], [0, -1], [1, -1],
+               [-1,  0],          [1,  0],
+               [-1,  1], [0,  1], [1,  1]];
+  var tick = 0, unitsPerTick = 0, timePerTick = 0;
 
   // Prefill the x axis with arrays
-  for (var x = -1; x < boardWidth + 1; x++) { units[x] = []; }
+  for (var x = -2; x < boardWidth + 2; x++) { units[x] = []; }
 
   // Seed the world with random units
   for (var i = 0; i < (boardWidth * boardHeight / 3); i++) {
@@ -31,64 +35,85 @@ $(document).ready(function() {
       , y = Math.floor(Math.random() * boardHeight);
     // Don't seed a coordinate twice. Try seeding another one
     if (typeof units[x][y] !== 'undefined') { i--; }
-    else { units[x][y] = 0; }
+    else { units[x][y] = 0; liveUnits.push({ x: x, y: y }); }
+  }
+
+  function checkUnitLife(x, y, unit) {
+    var count = 0;
+
+    if (x < 0 || x > boardWidth || y < 0 || y > boardHeight) { return false; }
+
+    for (s = 0; s < sides.length; s++) {
+      if (typeof units[x + sides[s][0]][y + sides[s][1]] !== 'undefined') { count++; }
+    }
+
+    // Queue unit changes until all rendering is complete
+    if (unit === false && birthReq.min <= count && count <= birthReq.max) {
+      return true;
+    } else if (unit !== false && (count < 2 || count > 3 || unit > unitLifespan)) {
+      return false;
+    }
+    return null;
   }
 
   function updateUnits() {
+    var start = window.performance.now();
     var unitDeaths = [], unitBirths = [];
 
-    var sides = [[-1, -1], [0, -1], [1, -1],
-                 [-1,  0],          [1,  0],
-                 [-1,  1], [0,  1], [1,  1]]
-      , x, y, count, s, unitExists, alpha;
-
     // Run through the rules of unit growth and death
-    for (x = 0; x < boardWidth; x++) {
-      for (y = 0; y < boardHeight; y++) {
-        count = 0;
+    liveUnits.forEach(function (unit, index) {
+      var s;
+      var shouldLive = checkUnitLife(unit.x, unit.y, units[unit.x][unit.y]);
+      if (shouldLive === false) { unit.index = index; unitDeaths.push(unit); }
+      else { units[unit.x][unit.y]++; } // Age
 
-        for (s = 0; s < sides.length; s++) {
-          if (typeof units[x + sides[s][0]][y + sides[s][1]] !== 'undefined') { count++; }
-        }
-
-        unitExists = (typeof units[x][y] !== 'undefined');
-
-        if (unitExists === true) { units[x][y]++; }
-
-        // Queue unit changes until all rendering is complete
-        if (unitExists === true && (count < 2 || count > 3 || units[x][y] === unitLifespan)) {
-          unitDeaths.push({ x: x, y: y });
-        } else if (unitExists === false && birthReq.min <= count && count <= birthReq.max) {
-          unitBirths.push({ x: x, y: y });
+      // Handle surrounding units
+      for (s = 0; s < sides.length; s++) {
+        var sx = unit.x + sides[s][0], sy = unit.y + sides[s][1];
+        // Only check dead units
+        if (typeof units[sx][sy] === 'undefined' && checkUnitLife(sx, sy, false) === true) {
+          unitBirths.push({ x: sx, y: sy });
         }
       }
-    }
+    });
 
-    unitDeaths.forEach(function (unit) {
-      delete units[unit.x][unit.y];
-      ctx.fillStyle = 'rgb(255,255,255)';
+    liveUnits = liveUnits.filter(function (unit) {
+      if (unitDeaths.indexOf(unit) !== -1) {
+        // Unit dies
+        delete units[unit.x][unit.y];
+        ctx.fillStyle = 'rgb(255,255,255)';
+        ctx.fillRect(unit.x * unitSize, unit.y * unitSize, unitSize, unitSize);
+        return false;
+      } else {
+        // Unit lives
+        var intensity = Math.floor((255 / unitLifespan) * units[unit.x][unit.y]);
+        ctx.fillStyle = 'rgb(' + intensity + ',' + intensity + ',' + intensity + ')';
+        ctx.fillRect(unit.x * unitSize, unit.y * unitSize, unitSize, unitSize);
+        return true;
+      }
+    });
+
+    unitBirths.forEach(function (unit) {
+      // If the unit already exists, don't recreate it
+      if (typeof units[unit.x][unit.y] !== 'undefined') { return; }
+
+      units[unit.x][unit.y] = 0;
+      liveUnits.push({ x: unit.x, y: unit.y });
+      ctx.fillStyle = 'rgb(0,0,0)';
       ctx.fillRect(unit.x * unitSize, unit.y * unitSize, unitSize, unitSize);
     });
 
-    unitBirths.forEach(function (unit) { units[unit.x][unit.y] = 0; });
-    draw();
-  }
-
-  function draw() {
-    // Draw on the next animation frame
-    //setTimeout(function () { requestAnimationFrame(updateUnits); }, 1000 / fps);
-    requestAnimationFrame(updateUnits);
-
-    for (x = 0; x < boardWidth; x++) {
-      for (y = 0; y < boardHeight; y++) {
-        alpha = units[x][y];
-        if (typeof alpha === 'undefined') { continue; }
-
-        alpha = Math.floor((255 / unitLifespan) * units[x][y]);
-        ctx.fillStyle = 'rgb(' + alpha + ',' + alpha + ',' + alpha + ')';
-        ctx.fillRect(x * unitSize, y * unitSize, unitSize, unitSize);
-      }
+    tick++;
+    var executionTime = (window.performance.now() - start);
+    timePerTick += executionTime;
+    unitsPerTick += liveUnits.length;
+    if (tick < 500 && tick % 10 === 1) {
+      var timePerUnit = (timePerTick / unitsPerTick) * 1000;
+      console.log(timePerUnit + ' per 1000 units');
+      console.log(executionTime + ' for ' + liveUnits.length);
     }
+
+    requestAnimationFrame(updateUnits);
   }
 
   updateUnits();
@@ -134,5 +159,4 @@ $(document).ready(function() {
     }
     $birthDisplay.text(birthReq.min + ' to ' + birthReq.max + ' neighbours');
   }).trigger('input');
-  
 });
