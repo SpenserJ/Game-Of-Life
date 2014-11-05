@@ -34,36 +34,26 @@ $(document).ready(function() {
     else { units[x][y] = 0; }
   }
 
-  function draw() {
-    // Draw on the next animation frame
-    setTimeout(function () { requestAnimationFrame(draw); }, 1000 / fps);
-
-    // Color the background
-    ctx.fillStyle = 'rgb(255,255,255)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+  function updateUnits() {
     var unitDeaths = [], unitBirths = [];
 
-    // Run through the rules of unit growth and death
-    for (var x = 0; x < boardWidth; x++) {
-      for (var y = 0; y < boardHeight; y++) {
-        var count = 0;
-        var sides = [[-1, -1], [0, -1], [1, -1],
-                     [-1,  0],          [1,  0],
-                     [-1,  1], [0,  1], [1,  1]];
+    var sides = [[-1, -1], [0, -1], [1, -1],
+                 [-1,  0],          [1,  0],
+                 [-1,  1], [0,  1], [1,  1]]
+      , x, y, count, s, unitExists, alpha;
 
-        for (var s = 0; s < sides.length; s++) {
+    // Run through the rules of unit growth and death
+    for (x = 0; x < boardWidth; x++) {
+      for (y = 0; y < boardHeight; y++) {
+        count = 0;
+
+        for (s = 0; s < sides.length; s++) {
           if (typeof units[x + sides[s][0]][y + sides[s][1]] !== 'undefined') { count++; }
         }
 
-        var unitExists = (typeof units[x][y] !== 'undefined');
+        unitExists = (typeof units[x][y] !== 'undefined');
 
-        if (unitExists === true) {
-          var alpha = 1 - ((1 / unitLifespan) * units[x][y]);
-          ctx.fillStyle = 'rgba(0,0,0,' + alpha + ')';
-          ctx.fillRect(x * unitSize, y * unitSize, unitSize, unitSize);
-          units[x][y]++;
-        }
+        if (unitExists === true) { units[x][y]++; }
 
         // Queue unit changes until all rendering is complete
         if (unitExists === true && (count < 2 || count > 3 || units[x][y] === unitLifespan)) {
@@ -74,11 +64,34 @@ $(document).ready(function() {
       }
     }
 
-    unitDeaths.forEach(function (unit) { delete units[unit.x][unit.y]; });
+    unitDeaths.forEach(function (unit) {
+      delete units[unit.x][unit.y];
+      ctx.fillStyle = 'rgb(255,255,255)';
+      ctx.fillRect(unit.x * unitSize, unit.y * unitSize, unitSize, unitSize);
+    });
+
     unitBirths.forEach(function (unit) { units[unit.x][unit.y] = 0; });
+    draw();
   }
 
-  draw();
+  function draw() {
+    // Draw on the next animation frame
+    //setTimeout(function () { requestAnimationFrame(updateUnits); }, 1000 / fps);
+    requestAnimationFrame(updateUnits);
+
+    for (x = 0; x < boardWidth; x++) {
+      for (y = 0; y < boardHeight; y++) {
+        alpha = units[x][y];
+        if (typeof alpha === 'undefined') { continue; }
+
+        alpha = Math.floor((255 / unitLifespan) * units[x][y]);
+        ctx.fillStyle = 'rgb(' + alpha + ',' + alpha + ',' + alpha + ')';
+        ctx.fillRect(x * unitSize, y * unitSize, unitSize, unitSize);
+      }
+    }
+  }
+
+  updateUnits();
 
   var $controls = $('#controls');
   
