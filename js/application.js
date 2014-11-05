@@ -17,7 +17,7 @@ $(document).ready(function() {
     boardWidth  = Math.floor(canvas.width  / unitSize);
     boardHeight = Math.floor(canvas.height / unitSize);
   }
-  window.addEventListener('resize', resizeCanvas, false);
+  //window.addEventListener('resize', resizeCanvas, false);
   resizeCanvas();
 
   var units = [], liveUnits = [];
@@ -26,80 +26,103 @@ $(document).ready(function() {
                [-1,  1], [0,  1], [1,  1]];
   var tick = 0, unitsPerTick = 0, timePerTick = 0;
 
-  // Prefill the x axis with arrays
-  for (var x = -2; x < boardWidth + 2; x++) { units[x] = []; }
+  // Prefill the world with dead units
+  for (var x = -2; x < boardWidth + 2; x++) {
+    var unitCol = [];
+    for (var y = -2; y < boardHeight + 2; y++) {
+      unitCol[y] = {
+        x: x,
+        y: y,
+        alive: false,
+        dying: false,
+        siblings: [],
+      };
+    }
+    units[x] = unitCol;
+  }
 
-  // Seed the world with random units
+  var sx, sy;
+  // Mark all of the siblings
+  for (var x = 0; x < boardWidth; x++) {
+    for (var y = 0; y < boardHeight; y++) {
+      for (var s = 0; s < sides.length; s++) {
+        sx = x + sides[s][0];
+        sy = y + sides[s][1];
+        // Only add a sibling if it is within bounds
+        if (sx < 0 || sx > boardWidth || sy < 0 || sy > boardHeight) { continue; }
+        units[x][y].siblings.push(units[sx][sy]);
+      }
+    }
+  }
+
+  // Seed the world with random living units
   for (var i = 0; i < (boardWidth * boardHeight / 3); i++) {
     var x = Math.floor(Math.random() * boardWidth)
       , y = Math.floor(Math.random() * boardHeight);
     // Don't seed a coordinate twice. Try seeding another one
-    if (typeof units[x][y] !== 'undefined') { i--; }
-    else { units[x][y] = 0; liveUnits.push({ x: x, y: y }); }
+    if (units[x][y].alive !== false) { i--; }
+    else { units[x][y].alive = 0; liveUnits.push(units[x][y]); }
   }
 
-  function checkUnitLife(x, y, unit) {
-    var count = 0;
+  function checkUnitLife(unit) {
+    if (unit.x < 0 || unit.x > boardWidth || unit.y < 0 || unit.y > boardHeight) { return false; }
 
-    if (x < 0 || x > boardWidth || y < 0 || y > boardHeight) { return false; }
-
-    for (s = 0; s < sides.length; s++) {
-      if (typeof units[x + sides[s][0]][y + sides[s][1]] !== 'undefined') { count++; }
-    }
+    var count = unit.siblings.filter(function (sibling) { return sibling.alive !== false; }).length;
 
     // Queue unit changes until all rendering is complete
-    if (unit === false && birthReq.min <= count && count <= birthReq.max) {
+    if (unit.alive === false && birthReq.min <= count && count <= birthReq.max) {
+      // Unit should be born
       return true;
-    } else if (unit !== false && (count < 2 || count > 3 || unit > unitLifespan)) {
+    } else if (unit.alive !== false && (count < 2 || count > 3 || unit.alive > unitLifespan)) {
+      // Unit should die
       return false;
     }
+    // Unit shouldn't change
     return null;
   }
 
   function updateUnits() {
     var start = window.performance.now();
-    var unitDeaths = [], unitBirths = [];
+    var unitBirths = [];
 
     // Run through the rules of unit growth and death
-    liveUnits.forEach(function (unit, index) {
+    liveUnits.forEach(function (unit) {
       var s;
-      var shouldLive = checkUnitLife(unit.x, unit.y, units[unit.x][unit.y]);
-      if (shouldLive === false) { unit.index = index; unitDeaths.push(unit); }
-      else { units[unit.x][unit.y]++; } // Age
+      var shouldLive = checkUnitLife(unit);
+      if (shouldLive === false) { unit.dying = true; }
+      else { unit.alive++; } // Age
 
       // Handle surrounding units
-      for (s = 0; s < sides.length; s++) {
-        var sx = unit.x + sides[s][0], sy = unit.y + sides[s][1];
-        // Only check dead units
-        if (typeof units[sx][sy] === 'undefined' && checkUnitLife(sx, sy, false) === true) {
-          unitBirths.push({ x: sx, y: sy });
+      unit.siblings.forEach(function (sibling) {
+        if (sibling.alive === false && checkUnitLife(sibling) === true) {
+          unitBirths.push(sibling);
         }
-      }
+      });
     });
 
     liveUnits = liveUnits.filter(function (unit) {
-      if (unitDeaths.indexOf(unit) !== -1) {
+      if (unit.dying === true) {
         // Unit dies
-        delete units[unit.x][unit.y];
+        unit.alive = false;
+        unit.dying = false;
         ctx.fillStyle = 'rgb(255,255,255)';
         ctx.fillRect(unit.x * unitSize, unit.y * unitSize, unitSize, unitSize);
-        return false;
       } else {
         // Unit lives
-        var intensity = Math.floor((255 / unitLifespan) * units[unit.x][unit.y]);
+        var intensity = Math.floor((255 / unitLifespan) * unit.alive);
         ctx.fillStyle = 'rgb(' + intensity + ',' + intensity + ',' + intensity + ')';
         ctx.fillRect(unit.x * unitSize, unit.y * unitSize, unitSize, unitSize);
-        return true;
       }
+      return (unit.alive !== false);
     });
 
+    ctx.fillStyle = 'rgb(0,0,0)';
     unitBirths.forEach(function (unit) {
       // If the unit already exists, don't recreate it
-      if (typeof units[unit.x][unit.y] !== 'undefined') { return; }
+      if (unit.alive !== false) { return; }
 
-      units[unit.x][unit.y] = 0;
-      liveUnits.push({ x: unit.x, y: unit.y });
-      ctx.fillStyle = 'rgb(0,0,0)';
+      unit.alive = 0;
+      liveUnits.push(unit);
       ctx.fillRect(unit.x * unitSize, unit.y * unitSize, unitSize, unitSize);
     });
 
@@ -107,13 +130,15 @@ $(document).ready(function() {
     var executionTime = (window.performance.now() - start);
     timePerTick += executionTime;
     unitsPerTick += liveUnits.length;
-    if (tick < 500 && tick % 10 === 1) {
+    if (executionTime > 16 && tick % 10 === 1) {
       var timePerUnit = (timePerTick / unitsPerTick) * 1000;
       console.log(timePerUnit + ' per 1000 units');
       console.log(executionTime + ' for ' + liveUnits.length);
+      timePerTick = 0;
+      unitsPerTick = 0;
     }
 
-    requestAnimationFrame(updateUnits);
+    setTimeout(function () { requestAnimationFrame(updateUnits); }, 1000 / fps);
   }
 
   updateUnits();
