@@ -1,1 +1,16 @@
 body { margin: 0; }
+
+.controls {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: #fff;
+}
+
+.controls fieldset {
+  display: block;
+}
+
+.controls fieldset label {
+  display: block;
+}

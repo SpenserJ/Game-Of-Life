@@ -4,9 +4,25 @@
   <meta charset="utf-8">
   <title>title</title>
   <link rel="stylesheet" href="/css/styles.css">
+  <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
   <script src="/js/application.js"></script>
 </head>
 <body>
   <canvas id="gameoflife" style="width: 100%; height=100%;"></canvas>
+  <div id="controls" class="controls">
+    <fieldset class="fps">
+      <label>FPS: <span class="value">&nbsp;</span></label>
+      <input type="range" value="15" min="1" max="60">
+    </fieldset>
+    <fieldset class="generations">
+      <label>Generations: <span class="value">&nbsp;</span></label>
+      <input type="range" value="50">
+    </fieldset>
+    <fieldset class="birth">
+      <label>Birth: <span class="value">&nbsp;</span></label>
+      <label>Minimum neighbours</label><input id="birth_min" type="range" value="3" min="1" max="3">
+      <label>Maximum neighbours</label><input id="birth_max" type="range" value="3" min="3" max="8">
+    </fieldset>
+  </div>
 </body>
 </html>

@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", function(event) {
+$(document).ready(function() {
   var canvas = document.getElementById('gameoflife')
     , ctx = canvas.getContext('2d')
     , boardWidth
@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
   // Configuration Options
   var unitSize = 4
     , unitLifespan = 50
+    , birthReq = { min: 3, max: 3 }
     , fps = 15;
 
   // Resize the canvas to fill browser window dynamically
@@ -67,7 +68,7 @@ document.addEventListener("DOMContentLoaded", function(event) {
         // Queue unit changes until all rendering is complete
         if (unitExists === true && (count < 2 || count > 3 || units[x][y] === unitLifespan)) {
           unitDeaths.push({ x: x, y: y });
-        } else if (count === 3 && unitExists === false) {
+        } else if (unitExists === false && birthReq.min <= count && count <= birthReq.max) {
           unitBirths.push({ x: x, y: y });
         }
       }
@@ -78,4 +79,47 @@ document.addEventListener("DOMContentLoaded", function(event) {
   }
 
   draw();
+
+  var $controls = $('#controls');
+  
+  var $fps = $controls.find('.fps')
+    , $fpsDisplay = $fps.find('.value');
+  $fps.find('input').on('input', function (e) {
+    var val = $(this).val();
+    fps = val;
+    $fpsDisplay.text(val);
+  }).trigger('input');
+
+  var $generations = $controls.find('.generations')
+    , $generationsDisplay = $generations.find('.value');
+  $generations.find('input').on('input', function (e) {
+    var val = $(this).val();
+    if (val <= 0) {
+      console.log('Cannot set generations to zero');
+      return;
+    }
+
+    unitLifespan = val;
+    $generationsDisplay.text(val);
+  }).trigger('input');
+
+  var $birth = $controls.find('.birth')
+    , $birthDisplay = $birth.find('.value')
+    , $birthMin = $birth.find('#birth_min')
+    , $birthMax = $birth.find('#birth_max');
+  $birth.find('#birth_min').on('input', function () {
+    birthReq.min = $(this).val();
+    $birthMax.attr('min', birthReq.min).val(0).val(birthReq.max);
+  });
+  $birth.find('#birth_max').on('input', function () {
+    birthReq.max = $(this).val();
+    $birthMin.attr('max', birthReq.max).val(0).val(birthReq.min);
+  });
+  $birth.find('input').on('input', function (e) {
+    if (birthReq.min === birthReq.max) {
+      return $birthDisplay.text(birthReq.min + ' neighbours');
+    }
+    $birthDisplay.text(birthReq.min + ' to ' + birthReq.max + ' neighbours');
+  }).trigger('input');
+  
 });
